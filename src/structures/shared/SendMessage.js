@@ -1,10 +1,13 @@
 const Util = require('../../util/Util');
+const Embed = require('../MessageEmbed');
 
-module.exports = function sendMessage(channel, options) {
+module.exports = function sendMessage(channel, options) { // eslint-disable-line complexity
   const User = require('../User');
   if (channel instanceof User) return channel.createDM().then(dm => dm.send(options));
   const GuildMember = require('../GuildMember');
   let { content, nonce, reply, code, disableEveryone, tts, embed, files, split } = options;
+
+  if (embed) embed = new Embed(embed)._apiTransform();
 
   if (typeof nonce !== 'undefined') {
     nonce = parseInt(nonce);
