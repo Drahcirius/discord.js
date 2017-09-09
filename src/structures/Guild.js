@@ -417,9 +417,8 @@ class Guild extends Base {
    * Fetches a collection of roles in the current guild sorted by position
    * @type {Collection<Snowflake, Role>}
    * @readonly
-   * @private
    */
-  get _sortedRoles() {
+  get sortedRoles() {
     return this._sortPositionWithID(this.roles);
   }
 
@@ -1188,7 +1187,7 @@ class Guild extends Base {
     position = Number(position);
     if (isNaN(position)) return Promise.reject(new TypeError('INVALID_TYPE', 'position', 'number'));
 
-    let updatedRoles = this._sortedRoles.array();
+    let updatedRoles = this.sortedRoles.array();
 
     Util.moveElementInArray(updatedRoles, role, position, relative);
 
@@ -1215,6 +1214,20 @@ class Guild extends Base {
       return sort(this.channels.filter(c => c.type === Constants.ChannelTypes.CATEGORY));
     }
     return sort(this.channels.filter(c => c.parent === channel.parent));
+  }
+  /**
+   * Sorts a collection by object position or ID if the positions are equivalent.
+   * Intended to be identical to Discord's sorting method.
+   * @param {Collection} collection The collection to sort
+   * @returns {Collection}
+   * @private
+   */
+  _sortPositionWithID(collection) {
+    return collection.sort((a, b) =>
+      a.position !== b.position ?
+        a.position - b.position :
+        Long.fromString(a.id).sub(Long.fromString(b.id)).toNumber()
+    );
   }
 }
 
