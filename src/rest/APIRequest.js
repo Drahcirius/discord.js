@@ -1,5 +1,6 @@
 const querystring = require('querystring');
-const snekfetch = require('snekfetch');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
 const https = require('https');
 const { browser, UserAgent } = require('../util/Constants');
 
@@ -21,20 +22,31 @@ class APIRequest {
     const API = this.options.versioned === false ? this.client.options.http.api :
       `${this.client.options.http.api}/v${this.client.options.http.version}`;
 
-    const request = snekfetch[this.method](`${API}${this.path}`, { agent });
+    const requestOptions = { method: this.method, headers: {}, agent };
 
-    if (this.options.auth !== false) request.set('Authorization', this.rest.getAuth());
-    if (this.options.reason) request.set('X-Audit-Log-Reason', encodeURIComponent(this.options.reason));
-    if (!browser) request.set('User-Agent', UserAgent);
-    if (this.options.headers) request.set(this.options.headers);
+    if (this.options.auth !== false) requestOptions.headers.Authorization = this.rest.getAuth();
+    if (this.options.reason) requestOptions.headers['X-Audit-Log-Reason'] = encodeURIComponent(this.options.reason);
+    if (!browser) requestOptions.headers['User-Agent'] = UserAgent;
+    if (this.options.headers) {
+      Object.keys(this.options.headers).forEach(header => {
+        requestOptions.headers[header] = this.options.headers[header];
+      });
+    }
 
     if (this.options.files) {
-      for (const file of this.options.files) if (file && file.file) request.attach(file.name, file.file, file.name);
-      if (typeof this.options.data !== 'undefined') request.attach('payload_json', JSON.stringify(this.options.data));
+      const form = new FormData();
+      for (const file of this.options.files) {
+        if (file && file.file) form.append(file.name, file.file, { filename: file.name });
+      }
+      if (typeof this.options.data !== 'undefined') form.append('payload_json', JSON.stringify(this.options.data));
+      requestOptions.headers['Content-Type'] = form.getHeaders()['content-type'];
+      requestOptions.body = form;
     } else if (typeof this.options.data !== 'undefined') {
-      request.send(this.options.data);
+      requestOptions.headers['Content-Type'] = 'application/json';
+      requestOptions.body = JSON.stringify(this.options.data);
     }
-    return request;
+
+    return fetch(`${API}${this.path}`, requestOptions);
   }
 }
 

@@ -60,30 +60,35 @@ class RequestHandler {
           resolve();
         }
       };
-      item.request.gen().end((err, res) => {
-        if (res && res.headers) {
-          if (res.headers['x-ratelimit-global']) this.globallyLimited = true;
-          this.limit = Number(res.headers['x-ratelimit-limit']);
-          this.resetTime = Number(res.headers['x-ratelimit-reset']) * 1000;
-          this.remaining = Number(res.headers['x-ratelimit-remaining']);
-          this.manager.timeDifference = Date.now() - new Date(res.headers.date).getTime();
-        }
-        if (err) {
-          if (err.status === 429) {
+      item.request.gen().then(async res => {
+        if (!res.ok) {
+          if (res.status === 429) {
             this.queue.unshift(item);
-            finish(Number(res.headers['retry-after']) + this.client.options.restTimeOffset);
-          } else if (err.status >= 500 && err.status < 600) {
+            finish(Number(res.headers.get('retry-after')) + this.client.options.restTimeOffset);
+          } else if (res.status >= 500 && res.status < 600) {
             this.queue.unshift(item);
             finish(1e3 + this.client.options.restTimeOffset);
+          } else if (res.status >= 400 && res.status < 500) {
+            item.reject(new DiscordAPIError(res.url, await res.json()));
+            finish();
           } else {
-            item.reject(err.status >= 400 && err.status < 500 ? new DiscordAPIError(res.request.path, res.body) : err);
+            item.reject(`${res.status}: ${res.statusCode}`);
             finish();
           }
         } else {
-          const data = res && res.body ? res.body : {};
+          if (res.headers.get('x-ratelimit-global')) this.globallyLimited = true;
+          this.limit = Number(res.headers.get('x-ratelimit-limit'));
+          this.resetTime = Number(res.headers.get('x-ratelimit-reset')) * 1000;
+          this.remaining = Number(res.headers.get('x-ratelimit-remaining'));
+          this.manager.timeDifference = Date.now() - new Date(res.headers.get('date')).getTime();
+
+          const data = await res.json() || {};
           item.resolve(data);
           finish();
         }
+      }).catch(err => {
+        item.reject(err);
+        finish();
       });
     });
   }
